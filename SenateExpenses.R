@@ -44,14 +44,15 @@ fn <- file.path(tempdir(), "cb_2017_us_state_5m.zip", fsep = "\\")
 download.file("http://www2.census.gov/geo/tiger/GENZ2017/shp/cb_2017_us_state_5m.zip", fn)
 utils::unzip(fn, exdir = tempdir())
 geom <- readOGR(dsn = file.path(tempdir(), "cb_2017_us_state_5m.shp"))
-#geom <- readOGR("C:/Users/Peter/Desktop/Utica/DataVisualization-611/Module8/cb_2017_us_state_20m/cb_2017_us_state_20m.shp")
 
 #join attribute data to geometries
 geom@data$id <- rownames(geom@data)   #create an identifier for each census block (running number)
 geoforti <- fortify(geom)             #create fortify object 
 geoforti <- join(geoforti, geom@data, by="id")    #join geometries to fortify object
 
-geoforti <- geoforti[geoforti$long < -50,]
+#make it just contiguous US for better visibility
+geoforti <- geoforti[geoforti$long < -50 & geoforti$long > -125,]
+geoforti <- geoforti[geoforti$lat > 25 & geoforti$lat < 50,]
 geoforti <- merge(geoforti, stateEx, by.x="NAME", by.y="State", all.x=T, a..ly=F)
 
 # create the map layers
