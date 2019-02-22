@@ -63,4 +63,8 @@ ggp <- ggp + coord_equal()
 ggp <- ggp + scale_fill_gradient(low = "#ffffcc", high = "red",
                                    space = "Lab", na.value = "grey50",
                                    guide = "colourbar") # specify colors
-ggp
+
+ggp <- ggp + labs(title="Senator Spending by State")
+ggp <- ggp + scalebar(data = geoforti, dd2km = TRUE, 
+                        dist=500, location="bottomright", st.size=2)
+north2(ggp, x=.10, y=.30,scale = 0.1, symbol = 1)
