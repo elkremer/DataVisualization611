@@ -5,31 +5,27 @@ require(mapproj)
 library(ggsn)
 library(dplyr)
 
+###############################################################################
+## Functions
+###############################################################################
+#Function to prepare and format the expense data
+prepareExpenseData <- function(exData) {
+  #Filter the data to only include the columns to be used.
+  #columns used: senator_name, start_date, end_date, description, amount, salary_flag
+  exData <- select(exData, senator_name, start_date, end_date, description, amount, salary_flag)
 
-#Read in the data files
-#expenses contains the data of expenditures for the 114th senate.
-expenses <- read.csv(file="C:/Users/Peter/Desktop/Utica/DataVisualization-611/Module8/114_sdoc7_senate_data.csv",
-                     header=TRUE, sep=",")
-#states is a mapping of senators to the states they serve
-states <- read.csv(file="C:/Users/Peter/Desktop/Utica/DataVisualization-611/Module8/2015senateDataStates.csv",
-                   header=TRUE, sep=",")
+  #eliminate null values in the senator_name column
+  exData <- exData[!exData$senator_name == "",]
 
-#Filter the data to only include the columns to be used.
-#columns used: senator_name, start_date, end_date, description, amount, salary_flag
-expenses <- select(expenses, senator_name, start_date, end_date, description, amount, salary_flag)
+  #merge the states and states abbreviations in 
+  exData <- merge(exData, states, all = TRUE)
+  exData$amount <- as.numeric(gsub(",","",exData$amount))
 
-#eliminate null values in the senator_name column
-expenses <- expenses[!expenses$senator_name == "",]
+  #Change factor to date for date related fields
+  exData$start_date <- as.Date(exData$start_date, "%m/%d/%y")
+  exData$end_date <- as.Date(exData$end_date, "%m/%d/%y")
 
-#merge the states and states abbreviations in 
-expenses <- merge(expenses, states, all = TRUE)
-expenses$amount <- as.numeric(gsub(",","",expenses$amount))
-
-#Change factor to date for date related fields
-expenses$start_date <- as.Date(expenses$start_date, "%m/%d/%y")
-expenses$end_date <- as.Date(expenses$end_date, "%m/%d/%y")
-
-expenses$description <- gsub("STAFF TRANSPORTATION.*","STAFF TRANSPORTATION", expenses$description) %>%
+  exData$description <- gsub("STAFF TRANSPORTATION.*","STAFF TRANSPORTATION", exData$description) %>%
                         gsub("SENATOR TRANSPORTATION.*","SENATOR TRANSPORTATION", .) %>%
                         gsub(".*INTERN.*", "INTERN", .) %>%
                         gsub(".*PER DIEM.*", "PER DIEM", .) %>%
@@ -37,14 +33,12 @@ expenses$description <- gsub("STAFF TRANSPORTATION.*","STAFF TRANSPORTATION", ex
                         gsub(".*STAFF ASSISTANT.*", "STAFF ASSISTANT", .) %>%
                         gsub("FROM\\s\\w{3}\\.\\s?\\d+", "", ., ignore.case = TRUE) %>%
                         gsub("TO\\s\\w{3}\\.\\s?\\d+", "", ., ignore.case = TRUE)
+  exData
+}
 
-senex1 <- aggregate(amount~senator_name, expenses, sum)
-senex2 <- aggregate(amount~senator_name, expenses, length)
-names(senex2) <- c("senator_name", "number_expenses")
-senex1 <- merge(senex1, senex2, all = TRUE)
 
 #Function to get the data and create the choropleth
-createSenatorChoroplethMap <- function() {
+createSenatorChoroplethMap <- function(expenses) {
   #Libraries required for choropleth map
   require(rgdal)
   library(ggsn)
@@ -53,17 +47,8 @@ createSenatorChoroplethMap <- function() {
   #choropleth data
   stateEx <- aggregate(amount~State, expenses, sum)
 
-  #Create a path for the download, download it and unzip it
-  fn <- file.path(getwd(), "cb_2017_us_state_5m.shp", fsep = "\\")
-  #Don't download the file if we already have it
-  if (!file.exists(fn)) {
-    download.file("http://www2.census.gov/geo/tiger/GENZ2017/shp/cb_2017_us_state_5m.zip", fn)
-    utils::unzip(fn, exdir = tempdir())
-  }
-  
   #Read in the shape file of the US
-  geom <- readOGR(dsn = file.path(tempdir(), "cb_2017_us_state_5m.shp"))
-#geom <- readOGR("C:/Users/Peter/Desktop/Utica/DataVisualization-611/Module8/cb_2017_us_state_20m/cb_2017_us_state_20m.shp")
+  geom <- readOGR("C:/Users/Peter/Desktop/Utica/DataVisualization-611/Module8/cb_2017_us_state_20m/cb_2017_us_state_20m.shp")
 
   #join attribute data to geometries
   geom@data$id <- rownames(geom@data)   #Create an identifier for each census block (running number)
@@ -96,10 +81,37 @@ createSenatorChoroplethMap <- function() {
 }
 
 createExpensesByMonthAnimation <- function() {
-  p <- ggplot(gapminder, aes(gdpPercap, lifeExp, color = continent)) +
-    geom_point(aes(size = pop, frame = year, ids = country)) +
-    scale_x_log10()
+  p <- ggplot(expenses, aes(start_date, amount, color = party)) +
+    geom_point(aes(size = amount, frame = start_date, ids = State)) +
   
   p <- ggplotly(p)
 }
-createSenatorChoroplethMap()
+
+###############################################################################
+## Program begins
+###############################################################################
+#Create a path for the downloads
+f1 <- file.path(getwd(), "114_sdoc7_senate_data.csv", fsep = "\\")
+f2 <- file.path(getwd(), "2015senateDataStates.csv", fsep = "\\")
+
+if (!file.exists(f1)) {
+  download.file("https://raw.githubusercontent.com/elkremer/DataVisualization611/master/114_sdoc7_senate_data.csv", f1)
+  #expenses contains the data of expenditures for the 114th senate.
+  expenses <- read.csv(file="114_sdoc7_senate_data.csv", header=TRUE, sep=",")
+}
+
+#Don't download the file if we already have it
+if (!file.exists(f2)) {
+  download.file("https://raw.githubusercontent.com/elkremer/DataVisualization611/master/2015senateDataStates.csv", f2)
+  #states is a mapping of senators to the states they serve
+  states <- read.csv(file="2015senateDataStates.csv", header=TRUE, sep=",")
+}
+
+expenses <- prepareExpenseData(exData = expenses)
+
+senex1 <- aggregate(amount~senator_name, expenses, sum)
+senex2 <- aggregate(amount~senator_name, expenses, length)
+names(senex2) <- c("senator_name", "number_expenses")
+senex1 <- merge(senex1, senex2, all = TRUE)
+
+createSenatorChoroplethMap(expenses)
