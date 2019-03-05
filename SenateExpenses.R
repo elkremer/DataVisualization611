@@ -12,7 +12,7 @@ library(dplyr)
 prepareExpenseData <- function(exData) {
   #Filter the data to only include the columns to be used.
   #Columns used: senator_name, start_date, end_date, description, amount, salary_flag
-  exData <- select(exData, senator_name, start_date, end_date, description, amount, salary_flag)
+  exData <- select(exData, senator_name, start_date, description, amount)
 
   #Eliminate null values in the senator_name column
   exData <- exData[!exData$senator_name == "",]
@@ -30,13 +30,25 @@ prepareExpenseData <- function(exData) {
   #Many columns ended with FROM/TO Mth.Day (e.g. FROM AUG.30). The ends of
   #these are removed.
   exData$description <- gsub("STAFF TRANSPORTATION.*","STAFF TRANSPORTATION", exData$description) %>%
-                        gsub("SENATOR TRANSPORTATION.*","SENATOR TRANSPORTATION", .) %>%
-                        gsub(".*INTERN.*", "INTERN", .) %>%
+                        gsub("SENATOR.*\\sTRANSPORTATION.*","SENATOR TRANSPORTATION", .) %>%
+                        gsub(".*INTERN.*", "INTERNS", .) %>%
                         gsub(".*PER DIEM.*", "PER DIEM", .) %>%
                         gsub(".*INCIDENTALS.*", "INCIDENTALS", .) %>%
+                        gsub("FIELD REPRESENTATIVE.*", "FIELD REPRESENTATIVE", .) %>%
+                        gsub(".*DIRECTOR.*", "DIRECTORS", .) %>%
+                        gsub("ADMINISTRATIVE\\s.*", "ADMINISTRATIVE PERSONNEL", .) %>%
                         gsub(".*STAFF ASSISTANT.*", "STAFF ASSISTANT", .) %>%
+                        gsub(".*ASSISTANT.*", "ASSISTANTS", .) %>%
+                        gsub(".*CONSTITUENT.*", "CONSTITUENT PERSONNEL", .) %>%
+                        gsub(".*COUNSEL.*", "COUNSEL", .) %>%
+                        gsub(".*CHIEF OF STAFF.*", "CHIEF OF STAFF", .) %>%
+                        gsub("CASE.*", "CASE WORKERS", .) %>%
+                        gsub(".*PRESS SECRETARY.*", "PRESS SECRETARIES", .) %>%
+                        gsub(".*ADVISOR.*", "ADVISORS", .) %>%
+                        gsub("SENIOR.*", "SENIOR PERSONNEL", .) %>%
                         gsub("FROM\\s\\w{3}\\.\\s?\\d+", "", ., ignore.case = TRUE) %>%
-                        gsub("TO\\s\\w{3}\\.\\s?\\d+", "", ., ignore.case = TRUE)
+                        gsub("TO\\s\\w{3}\\.\\s?\\d+", "", ., ignore.case = TRUE) %>%
+                        gsub("^\\s+|\\s+$", "", .) #Remove white space at the beginning and end
   exData
 }
 
@@ -97,7 +109,7 @@ createExpensesByMonthAnimation <- function(expenses) {
   #Call the plot  
   p <- ggplotly(p)
   #Define authentication info for plot.ly
-  Sys.setenv("plotly_username"="UserNameHere")
+    Sys.setenv("plotly_username"="UserNameHere")
   Sys.setenv("plotly_api_key"="ApiKeyHere")
   
   #Link and name the visualization 
@@ -139,6 +151,15 @@ names(senex2) <- c("senator_name", "number_expenses")
 senex1 <- merge(senex1, senex2, all = TRUE)
 #Merge the data with the state data
 senex1 <- merge(senex1, states, all = TRUE)
+#Rename the columns
+names(senex1) <- c("senator_name", "Total Expenses", "Number of Expenses", "State", "St.Abrv", "Party")
+
+tmp <- aggregate(amount~senator_name + description + State, expenses, sum)
+finalData <- merge(tmp, senex1, all = TRUE)
+
+#Write out filtered csv files for consumption by Tableau
+write.csv(expenses, "filteredExpenses.csv", row.names = FALSE)
+write.csv(senex1, "senex1.csv", row.names = FALSE)
 
 #Scatterplot R version
 ggplot(data = senex1) + 
@@ -153,8 +174,3 @@ createExpensesByMonthAnimation(expenses)
 #Scatterplot of the number of expenses vs. amount
 ggplot(data = senex1) + 
     geom_point(mapping = aes(x = amount, y = number_expenses, color = Party))
-
-
-#Write out filtered csv files for consumption by Tableau
-write.csv(expenses, "filteredExpenses.csv", row.names = FALSE)
-write.csv(senex1, "senex1.csv", row.names = FALSE)
